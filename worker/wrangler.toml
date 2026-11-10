@@ -1,0 +1,19 @@
+name = "class-games"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+preview_urls = false
+
+[vars]
+# Pages allowed to call this server (comma-separated, no trailing slash).
+ALLOWED_ORIGINS = "https://wen-tan.com,https://www.wen-tan.com,https://xiao-wen-tan.github.io"
+# Claude model for the "Summarize" button on the projector page.
+MODEL = "claude-sonnet-5"
+
+# Game sessions and layoff answers (Cloudflare D1). Create it with
+#   npx wrangler d1 create class-games
+# then paste the database_id it prints below. See README.md.
+[[d1_databases]]
+binding = "DB"
+database_name = "class-games"
+database_id = "2f0962d4-129d-44b2-b921-66a944b3cc4e"

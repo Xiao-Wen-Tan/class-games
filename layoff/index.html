@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Layoff decision | Atkinson Paper</title>
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="../common.js"></script>
+<script src="data.js"></script>
+<script>
+// Phone page for the layoff game. Screens: join, intro, rank, why, done.
+const S = {
+  code: (params.get("s") || "").toUpperCase(), phase: "solo", groupRound: true,
+  order: [], criterion: null, reason: "", group: "", screen: "join", error: "", busy: false,
+};
+let player;
+try { player = localStorage.getItem("layoff.player"); if (!player) { player = crypto.randomUUID(); localStorage.setItem("layoff.player", player); } }
+catch { player = crypto.randomUUID(); }
+
+const byId = Object.fromEntries(MANAGERS.map(m => [m.id, m]));
+const pct = n => `<span class="growth ${n > 0 ? "up" : n < 0 ? "down" : ""}">${n > 0 ? "+" : ""}${n}%</span>`;
+const isGroup = () => S.phase === "group";
+
+function render() {
+  const app = $("#app");
+  const err = S.error ? `<div class="msg err">${esc(S.error)}</div>` : "";
+  if (S.screen === "join") {
+    app.innerHTML = `<div class="kicker">IMS 3310 class game</div><h1>Layoff decision</h1>
+      <p>Type the 4-letter code on the screen.</p>
+      <input id="code" type="text" maxlength="4" autocapitalize="characters" value="${esc(S.code)}" placeholder="ABCD">
+      <div style="height:12px"></div>${err}<button class="btn" id="go">Join</button>`;
+    $("#go").onclick = () => { S.code = $("#code").value.trim().toUpperCase(); join(); };
+    return;
+  }
+  if (S.screen === "intro") {
+    app.innerHTML = `<div class="kicker">Atkinson Paper Company${isGroup() ? " &middot; group round" : ""}</div>
+      <h1>You are Lynn Jackson, National Sales Manager.</h1>
+      <p>Atkinson makes office paper. Its parent company, Continental, now treats it as a <b>cash cow</b>, with goals of profit of <b>10% of sales</b> and sales growth of <b>3% a year</b>.</p>
+      <p>Your boss, Pat Ingram, says you must cut costs by moving to fewer regional offices. As a first step, rank all <b>eight regional sales managers</b> in layoff order.</p>
+      <div class="card gold"><b>1 = laid off first.</b> 8 = laid off last.</div>
+      ${isGroup() ? `<div class="card blue"><b>Group round.</b> Agree as a group. One person submits for the whole group.</div>` : ""}
+      <button class="btn" id="go">See the eight managers</button>`;
+    $("#go").onclick = () => { S.screen = "rank"; render(); scrollTo(0, 0); };
+    return;
+  }
+  if (S.screen === "rank") {
+    const cards = MANAGERS.map(m => {
+      const k = S.order.indexOf(m.id);
+      return `<div class="card mgr ${k >= 0 ? "picked" : ""}" data-id="${m.id}">
+        <div class="badge">${k >= 0 ? k + 1 : ""}</div>
+        <div><div class="who">${esc(m.name)}</div>
+        <div class="meta">${esc(m.region)} &middot; ${m.age ? m.age + " yrs old" : "age not given"} &middot; ${m.tenure} yrs at APC</div>
+        <div class="facts">Sales growth ${pct(m.earlier)} (${m.earlierYears || "2016-18"}) &rarr; ${pct(m.recent)} (2019-21)<br>
+        ${esc(m.who)}. ${esc(m.edu)}.${m.note ? "<br>" + esc(m.note) : ""}</div></div></div>`;
+    }).join("");
+    const left = MANAGERS.length - S.order.length;
+    app.innerHTML = `<div class="kicker">Tap in layoff order${isGroup() ? " &middot; group round" : ""}</div>
+      <h2>${left ? `Tap who goes ${S.order.length ? "next" : "first"}.` : "All eight ranked."}</h2>
+      <p class="small dim">Tap a numbered card again to take it back.</p>${cards}${err}
+      <button class="btn" id="go" ${left ? "disabled" : ""}>${left ? `${left} still to rank` : "Next"}</button>
+      <button class="btn ghost" id="clear">Start over</button>`;
+    app.querySelectorAll(".mgr").forEach(el => el.onclick = () => {
+      const id = el.dataset.id, k = S.order.indexOf(id);
+      if (k >= 0) S.order.splice(k, 1); else S.order.push(id);
+      S.error = ""; render();
+    });
+    $("#go").onclick = () => { S.screen = "why"; render(); scrollTo(0, 0); };
+    $("#clear").onclick = () => { S.order = []; render(); };
+    return;
+  }
+  if (S.screen === "why") {
+    app.innerHTML = `<div class="kicker">One last step</div>
+      <h2>What mattered most in your ranking?</h2>
+      <div class="chips">${CRITERIA.map(([k, l]) => `<button class="chip ${S.criterion === k ? "on" : ""}" data-k="${k}">${l}</button>`).join("")}</div>
+      <p class="small"><b>In one sentence, why is ${esc(byId[S.order[0]].name)} first to go?</b></p>
+      <textarea id="reason" maxlength="280" placeholder="Optional, shown anonymously">${esc(S.reason)}</textarea>
+      ${isGroup() ? `<p class="small" style="margin-top:12px"><b>Your group number</b></p><input id="group" type="text" inputmode="numeric" maxlength="2" value="${esc(S.group)}" placeholder="for example 3">` : ""}
+      <div style="height:12px"></div>${err}
+      <button class="btn green" id="go" ${S.criterion && !S.busy ? "" : "disabled"}>${S.busy ? "Sending..." : isGroup() ? "Submit for my group" : "Submit"}</button>
+      <button class="btn ghost" id="back">Back to the ranking</button>`;
+    app.querySelectorAll(".chip").forEach(el => el.onclick = () => { S.reason = $("#reason").value; S.criterion = el.dataset.k; if ($("#group")) S.group = $("#group").value; render(); });
+    $("#back").onclick = () => { S.reason = $("#reason").value; S.screen = "rank"; render(); };
+    $("#go").onclick = submit;
+    return;
+  }
+  // done
+  app.innerHTML = `<div class="kicker">Sent${isGroup() ? " for group " + esc(S.group) : ""}</div>
+    <h1>Look at the screen.</h1>
+    <p>Your layoff order:</p>
+    <div class="card">${S.order.map((id, i) => `<div style="padding:4px 0"><b>${i + 1}.</b> ${esc(byId[id].name)} <span class="dim small">(${esc(byId[id].region)})</span></div>`).join("")}</div>
+    ${S.phase === "group" && !S.sentGroup ? `<div class="card blue"><b>Group round has started.</b> Agree on one order as a group; one person submits it.</div><button class="btn" id="grp">Enter my group's ranking</button>` : ""}
+    <button class="btn ghost" id="edit">Change my answer</button>`;
+  $("#edit").onclick = () => { S.screen = "rank"; render(); scrollTo(0, 0); };
+  if ($("#grp")) $("#grp").onclick = () => { S.order = []; S.criterion = null; S.reason = ""; S.screen = "intro"; render(); };
+}
+
+async function join() {
+  S.error = "";
+  try {
+    const r = await api("/join", { code: S.code });
+    if (r.game !== "layoff") throw new Error("This code is for a different game.");
+    S.phase = r.phase; S.groupRound = r.group_round; S.screen = "intro";
+    history.replaceState(null, "", "?s=" + S.code);
+  } catch (e) { S.error = e.message; }
+  render();
+}
+
+async function submit() {
+  S.reason = $("#reason").value.trim();
+  if ($("#group")) S.group = $("#group").value.trim();
+  if (isGroup() && !/^\d{1,2}$/.test(S.group)) { S.error = "Type your group number."; render(); return; }
+  S.busy = true; S.error = ""; render();
+  try {
+    const r = await api("/layoff/submit", { code: S.code, player, ranking: S.order, criterion: S.criterion, reason: S.reason, group: isGroup() ? S.group : undefined });
+    if (r.kind === "group") S.sentGroup = true;
+    S.screen = "done";
+  } catch (e) { S.error = e.message; }
+  S.busy = false; render(); scrollTo(0, 0);
+}
+
+// While waiting on the done screen, notice when the instructor starts the group round.
+setInterval(async () => {
+  if (S.screen !== "done" || document.hidden) return;
+  try { const r = await api("/join", { code: S.code }); if (r.phase !== S.phase) { S.phase = r.phase; render(); } } catch {}
+}, 6000);
+
+if (S.code) join(); else render();
+</script>
+</body>
+</html>

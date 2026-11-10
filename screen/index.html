@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Class games | projector</title>
+<link rel="stylesheet" href="../style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body class="screen">
+<div id="app"></div>
+<script src="../common.js"></script>
+<script src="../layoff/data.js"></script>
+<script>
+// Projector page for the instructor. ?game=layoff or ?game=alliance starts a new game;
+// ?code=ABCD reopens one. Needs the instructor password (ADMIN_TOKEN on the server).
+const G = { game: params.get("game") || "layoff", code: (params.get("code") || "").toUpperCase(), d: null, view: "solo",
+  token: (() => { try { return sessionStorage.getItem("games.token") || ""; } catch { return ""; } })(), error: "", busy: "" };
+const NAME = Object.fromEntries(MANAGERS.map(m => [m.id, m.name]));
+const CRIT = Object.fromEntries(CRITERIA);
+const ALLIANCE_DEBRIEF = [
+  "What does winning look like here?",
+  "Why was your group able or unable to make a product?",
+  "Which resource is more important, knowledge or production units?",
+  "Why is it so difficult to get needed resources? Which groups were you willing to work with, and which not?",
+  "Who had the most bargaining power, and why?",
+];
+
+function qr(el, text, size) {
+  el.innerHTML = "";
+  new QRCode(el, { text, width: size, height: size, correctLevel: QRCode.CorrectLevel.M });
+}
+
+function bars(rows, max, cls = "") {
+  return `<div class="bars ${cls}">${rows.map(([label, n, shown]) => `<div class="bar"><div>${esc(label)}</div>
+    <div class="track"><div class="fill" style="width:${max ? Math.round(100 * n / max) : 0}%"></div></div><div class="num">${shown ?? n}</div></div>`).join("")}</div>`;
+}
+
+function render() {
+  const app = $("#app");
+  const err = G.error ? `<div class="msg err">${esc(G.error)}</div>` : "";
+  if (!G.d) {
+    app.innerHTML = `<div class="kicker">Instructor</div><h1>${G.game === "alliance" ? "Alliance game" : "Layoff game"}</h1>
+      <div class="card" style="max-width:520px">
+      <p>Instructor password</p><input id="tok" type="password" value="${esc(G.token)}">
+      <div style="height:12px"></div>${err}
+      <button class="btn" id="new">${G.code ? "Open game " + esc(G.code) : "Start a new game"}</button></div>`;
+    $("#new").onclick = start;
+    return;
+  }
+  if (G.d.game === "layoff") renderLayoff(app, err); else renderAlliance(app, err);
+}
+
+// ---------- Layoff ----------
+
+function renderLayoff(app, err) {
+  const d = G.d, t = d.tally[G.view], url = `${SITE_ROOT}layoff/?s=${d.code}`;
+  const first = MANAGERS.map(m => [m.name, t.first[m.id]]).sort((a, b) => b[1] - a[1]);
+  const avg = MANAGERS.map(m => [m.name, t.avg_rank[m.id] ?? 0, t.avg_rank[m.id] ?? "-"]).sort((a, b) => a[1] - b[1]);
+  const crit = CRITERIA.map(([k, l]) => [l, t.criteria[k]]).sort((a, b) => b[1] - a[1]);
+  const phaseLabel = { solo: "Individual round", group: "Group round", closed: "Answers closed" }[d.phase];
+  app.innerHTML = `<div class="top"><h1>Who goes first? <span class="dim" style="font-size:1.2rem">Atkinson Paper layoff decision</span></h1>
+      <div class="codebox">${d.code}</div></div>
+    <div class="controls noprint">
+      <button class="btn ghost" data-phase="solo">Individual round</button>
+      <button class="btn ghost" data-phase="group">Start group round</button>
+      <button class="btn ghost" data-phase="closed">Close answers</button>
+      <button class="btn ghost" id="view">Showing: ${G.view === "solo" ? "individuals" : "groups"} (switch)</button>
+      <button class="btn" id="sum">${G.busy === "sum" ? "Claude is reading the reasons..." : "Summarize reasons with AI"}</button>
+    </div>${err}
+    <div class="grid2">
+      <div>
+        <div class="card"><div class="row" style="align-items:center;gap:22px"><div class="qr" id="qr"></div>
+          <div><div class="kicker">${phaseLabel}</div><div class="big">${t.n}</div><div class="dim">${G.view === "solo" ? "people" : "groups"} have answered</div>
+          <p class="small dim" style="margin-top:10px">Scan, or go to<br><b>${esc(url.replace(/^https?:\/\//, ""))}</b></p></div></div></div>
+        <div class="card"><h3>Laid off first (number of ${G.view === "solo" ? "people" : "groups"})</h3>${bars(first, Math.max(1, ...first.map(r => r[1])))}</div>
+      </div>
+      <div>
+        <div class="card"><h3>Average rank (1 = laid off first)</h3>${bars(avg.map(([n, v, s]) => [n, v ? 9 - v : 0, s]), 8, "gold")}</div>
+        <div class="card"><h3>What mattered most</h3>${bars(crit, Math.max(1, ...crit.map(r => r[1])), "blue")}</div>
+      </div>
+    </div>
+    ${d.summary ? `<div class="card gold"><div class="kicker">AI summary of the reasons</div><div class="summary">${esc(d.summary)}</div></div>` : ""}
+    <div class="card"><h3>Debrief</h3><ol>${DEBRIEF.map(q => `<li style="margin:6px 0">${esc(q)}</li>`).join("")}</ol></div>`;
+  qr($("#qr"), url, 200);
+  app.querySelectorAll("[data-phase]").forEach(b => b.onclick = () => phase(b.dataset.phase));
+  $("#view").onclick = () => { G.view = G.view === "solo" ? "group" : "solo"; render(); };
+  $("#sum").onclick = summarize;
+}
+
+// ---------- Alliance ----------
+
+function network(d) {
+  const N = Object.keys(d.teams).map(Number), W = 520, H = 420, R = 160, cx = W / 2, cy = H / 2;
+  const pos = Object.fromEntries(N.map((n, i) => [n, [cx + R * Math.sin(2 * Math.PI * i / N.length), cy - R * Math.cos(2 * Math.PI * i / N.length)]]));
+  const flow = {};
+  for (const e of d.log) if (e.type === "give") { const k = `${e.from}-${e.to}`; flow[k] = (flow[k] || 0) + e.value; }
+  const maxF = Math.max(1, ...Object.values(flow));
+  const lines = Object.entries(flow).map(([k, v]) => {
+    const [a, b] = k.split("-").map(Number), [x1, y1] = pos[a], [x2, y2] = pos[b];
+    const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy), ox = -dy / L * 6, oy = dx / L * 6;
+    const sx = x1 + dx / L * 40 + ox, sy = y1 + dy / L * 40 + oy, ex = x2 - dx / L * 44 + ox, ey = y2 - dy / L * 44 + oy;
+    return `<line x1="${sx}" y1="${sy}" x2="${ex}" y2="${ey}" stroke="#2f6db5" stroke-width="${2 + 8 * v / maxF}" marker-end="url(#arr)" opacity=".8"/>
+      <text x="${(sx + ex) / 2 + ox * 2}" y="${(sy + ey) / 2 + oy * 2}" font-size="14" fill="#2f6db5" text-anchor="middle" font-weight="700">${v}</text>`;
+  }).join("");
+  const nodes = N.map(n => { const [x, y] = pos[n], t = d.teams[n];
+    return `<circle cx="${x}" cy="${y}" r="36" fill="${t.products ? "#e8f6f1" : "#fff"}" stroke="${n === 1 ? "#e0952b" : t.products ? "#0e9a72" : "#dde5ee"}" stroke-width="4"/>
+      <text x="${x}" y="${y + 2}" text-anchor="middle" font-size="22" font-weight="800" fill="#10243e">G${n}</text>
+      <text x="${x}" y="${y + 20}" text-anchor="middle" font-size="12" fill="#5b6b7c">${t.products ? t.products + " sold" : ""}</text>`; }).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-height:420px"><defs><marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2f6db5"/></marker></defs>${lines}${nodes}</svg>`;
+}
+
+function renderAlliance(app, err) {
+  const d = G.d, N = Object.keys(d.teams);
+  const link = n => `${SITE_ROOT}alliance/?s=${d.code}&t=${n}&k=${d.teams[n].key}`;
+  const totalProducts = N.reduce((s, n) => s + d.teams[n].products, 0);
+  const head = `<div class="top"><h1>The Strategic Alliance Game</h1>
+    <div class="codebox" style="min-width:4.5ch;text-align:center">${d.started ? mmss(d.seconds_left) : d.minutes + ":00"}</div></div>`;
+  if (!d.started && d.phase === "play") {
+    app.innerHTML = `${head}<p>Each group scans <b>its own</b> code. Everyone in a group may scan the same code.</p>
+      <div class="controls noprint"><button class="btn" id="startclock">Start the ${d.minutes}-minute clock</button><button class="btn ghost" onclick="print()">Print the group codes</button></div>${err}
+      <div class="grid3">${N.map(n => `<div class="card teamqr"><h2 style="margin:0">Group ${n}</h2><div class="qr" id="q${n}"></div></div>`).join("")}</div>`;
+    N.forEach(n => qr($("#q" + n), link(n), 170));
+    $("#startclock").onclick = () => phase("start");
+    return;
+  }
+  const prod = N.map(n => [`Group ${n}`, d.teams[n].products, `${d.teams[n].products} (${d.teams[n].points} pts)`]);
+  const recent = d.log.slice(-10).reverse().map(e => e.type === "give" ? `Group ${e.from} gave Group ${e.to} units worth ${e.value}`
+    : e.type === "product" ? `<b>Group ${e.team} sold a product</b>` : `Customer rejected a product from Group ${e.team}`);
+  const reveal = d.phase === "reveal";
+  app.innerHTML = `${head}
+    <div class="controls noprint">
+      ${reveal ? `<button class="btn ghost" data-phase="play">Back to the game</button>` : `<button class="btn ghost" data-phase="reveal">End and reveal</button>`}
+      <button class="btn" id="sum">${G.busy === "sum" ? "Claude is reading the trades..." : "Summarize the game with AI"}</button>
+    </div>${err}
+    ${reveal ? `<div class="card gold"><div class="row" style="align-items:center;gap:26px">
+        <div><div class="big">${d.start_total}</div><div class="dim">units in the room</div></div>
+        <div><div class="big">${d.max_products * d.spec}</div><div class="dim">needed for ${d.max_products} products of ${d.spec}</div></div>
+        <div><div class="big">${totalProducts}</div><div class="dim">products the class actually sold</div></div>
+        <p style="flex:1;margin:0;font-size:1.25rem"><b>Everyone could have won.</b> Only one group knew the product was ${d.spec} units, and only pooling made six products possible.</p></div></div>` : ""}
+    <div class="grid2">
+      <div class="card"><h3>Who gave units to whom</h3>${network(d)}</div>
+      <div>
+        <div class="card"><h3>Products sold</h3>${bars(prod, Math.max(1, ...prod.map(r => r[1])), "green")}
+          <p class="small dim" style="margin:8px 0 0">${d.trades} gifts of units so far &middot; ${d.points_per_product} bonus points per product</p></div>
+        <div class="card"><h3>Latest moves</h3><ul class="log">${recent.map(r => `<li>${r}</li>`).join("") || "<li class='dim'>No moves yet</li>"}</ul></div>
+      </div>
+    </div>
+    ${reveal ? `<div class="card"><h3>Starting packets</h3><table class="alloc"><tr><th>Group</th><th>Started with (value)</th><th>Holds now</th><th>Products</th></tr>
+      ${N.map(n => `<tr><td>Group ${n}${n === "1" ? " (knew the specification)" : ""}</td><td>${d.teams[n].start_value}</td><td>${d.teams[n].value}</td><td>${d.teams[n].products}</td></tr>`).join("")}</table></div>
+      <div class="card"><h3>Debrief</h3><ol>${ALLIANCE_DEBRIEF.map(q => `<li style="margin:6px 0">${esc(q)}</li>`).join("")}</ol></div>` : ""}
+    ${d.summary ? `<div class="card gold"><div class="kicker">AI summary of the game</div><div class="summary">${esc(d.summary)}</div></div>` : ""}`;
+  app.querySelectorAll("[data-phase]").forEach(b => b.onclick = () => phase(b.dataset.phase));
+  $("#sum").onclick = summarize;
+}
+
+// ---------- Server calls ----------
+
+async function start() {
+  G.token = $("#tok").value.trim(); G.error = "";
+  try { sessionStorage.setItem("games.token", G.token); } catch {}
+  try {
+    if (!G.code) G.code = (await api("/new", { token: G.token, game: G.game })).code;
+    history.replaceState(null, "", `?code=${G.code}`);
+    await refresh();
+  } catch (e) { G.error = e.message; render(); }
+}
+
+async function refresh() {
+  let changed = true;
+  try {
+    const d = await api("/screen", { token: G.token, code: G.code });
+    changed = JSON.stringify(d) !== JSON.stringify(G.d) || !!G.error;
+    G.d = d; G.error = "";
+  } catch (e) { G.error = e.message; }
+  if (changed) render(); // redrawing only on change keeps the QR codes from flickering
+}
+
+async function phase(p) {
+  try { G.d = await api("/phase", { token: G.token, code: G.code, phase: p }); G.error = ""; } catch (e) { G.error = e.message; }
+  render();
+}
+
+async function summarize() {
+  G.busy = "sum"; render();
+  try { await api("/summary", { token: G.token, code: G.code }); } catch (e) { G.error = e.message; }
+  G.busy = ""; await refresh();
+}
+
+render();
+if (G.code && G.token) start();
+setInterval(() => { if (G.d && !document.hidden && !G.busy) refresh(); }, 2500);
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "name": "class-games",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "devDependencies": {
+    "wrangler": "^4.158.0"
+  }
+}

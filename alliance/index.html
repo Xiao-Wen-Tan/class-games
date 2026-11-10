@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Alliance game</title>
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<div id="app"><p class="dim">Loading your group...</p></div>
+<script src="../common.js"></script>
+<script>
+// Phone page for one group in the alliance game. The link on the group's QR code carries the
+// session code (s), the group number (t) and the group's private key (k).
+const DENOMS = ["1", "5", "10", "25"];
+const S = { code: params.get("s"), team: params.get("t"), key: params.get("k"), d: null, tab: "build",
+  pick: { 1: 0, 5: 0, 10: 0, 25: 0 }, to: null, msg: null, busy: false };
+const value = u => DENOMS.reduce((s, d) => s + Number(d) * (u[d] || 0), 0);
+const fmtUnits = u => DENOMS.filter(d => u[d]).map(d => `${u[d]}&times;${d}`).join(" + ") || "none";
+
+function slips(u, editable) {
+  return `<div class="slips">${DENOMS.map(d => `<div class="slip u${d}"><div class="d">${d}-unit slips</div>
+    <div class="n">${editable ? S.pick[d] : u[d]}</div>
+    ${editable ? `<div class="held">of ${u[d]} held</div><div class="stepper"><button data-d="${d}" data-s="-1">&minus;</button><button data-d="${d}" data-s="1">+</button></div>` : ""}</div>`).join("")}</div>`;
+}
+
+function render() {
+  const d = S.d, app = $("#app");
+  if (!d) return;
+  const msg = S.msg ? `<div class="msg ${S.msg.ok ? "ok" : "err"}">${esc(S.msg.text)}</div>` : "";
+  const over = d.phase !== "play" || (d.started && d.seconds_left === 0);
+  const clock = !d.started ? "Planning time" : over ? "Time is up" : `${mmss(d.seconds_left)} left`;
+  const knowledge = d.spec
+    ? `<div class="card gold"><div class="kicker">Business secret &middot; only your group has this</div><h2 style="margin:0">The product should be a combination of ${d.spec} units.</h2><p class="small dim" style="margin:.4rem 0 0">You hold no production units. Your knowledge is your resource.</p></div>`
+    : `<div class="card"><p class="small" style="margin:0">Only one group knows exactly what the customer wants. Production units alone do not tell you.</p></div>`;
+  const picked = value(S.pick);
+  let action = "";
+  if (over) action = `<div class="card blue"><b>Look at the screen</b> for the results.</div>`;
+  else if (!d.started) action = `<div class="card blue"><b>Plan now.</b> What do you have, what do you need, and who might work with you? Trading opens when the instructor starts the clock.</div>`;
+  else {
+    const tabs = `<div class="tabs"><button class="chip ${S.tab === "build" ? "on" : ""}" data-tab="build">Build a product</button><button class="chip ${S.tab === "give" ? "on" : ""}" data-tab="give">Give units</button></div>`;
+    if (S.tab === "build") action = `${tabs}<p class="small">Pick the units that make the product, then show the customer.</p>${slips(d.units, true)}
+      <div class="total">Product value: ${picked}</div>
+      <button class="btn green" id="go" ${picked && !S.busy && d.wrong_left > 0 ? "" : "disabled"}>Show the customer</button>
+      <p class="tiny dim" style="margin-top:8px">Wrong products the customer will still look at: ${d.wrong_left}</p>`;
+    else action = `${tabs}<p class="small">Pick the units to give, then the group that receives them.</p>${slips(d.units, true)}
+      <div class="total">Value to give: ${picked}</div>
+      <div class="chips">${d.teams.filter(t => t !== d.team).map(t => `<button class="chip ${S.to === t ? "on" : ""}" data-to="${t}">Group ${t}</button>`).join("")}</div>
+      <button class="btn" id="go" ${picked && S.to && !S.busy ? "" : "disabled"}>${S.to ? `Give ${picked} to Group ${S.to}` : "Pick a group"}</button>`;
+  }
+  const recent = d.recent.slice().reverse().map(e =>
+    e.type === "give" ? (e.from === d.team ? `You gave Group ${e.to} ${fmtUnits(e.units)}` : `Group ${e.from} gave you ${fmtUnits(e.units)}`)
+    : e.type === "product" ? `Product sold (${fmtUnits(e.units)})` : `Customer rejected a product worth ${e.value}`);
+  app.innerHTML = `<div class="kicker">Alliance game &middot; ${esc(clock)}</div>
+    <h1>Group ${d.team}</h1>
+    <div class="row" style="margin-bottom:12px">
+      <div class="card" style="flex:1;margin:0"><div class="big">${d.value}</div><div class="small dim">units of value held</div></div>
+      <div class="card green" style="flex:1;margin:0"><div class="big">${d.products}</div><div class="small dim">products sold (${d.points} bonus points)</div></div>
+    </div>
+    ${knowledge}
+    ${(S.tab && d.started && !over) ? "" : `<h3>Your production units</h3>${slips(d.units, false)}`}
+    ${msg}${action}
+    ${recent.length ? `<h3 style="margin-top:18px">Your recent moves</h3><ul class="log">${recent.map(r => `<li>${r}</li>`).join("")}</ul>` : ""}`;
+
+  app.querySelectorAll(".stepper button").forEach(b => b.onclick = () => {
+    const k = b.dataset.d, n = S.pick[k] + Number(b.dataset.s);
+    if (n >= 0 && n <= d.units[k]) { S.pick[k] = n; S.msg = null; render(); }
+  });
+  app.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { S.tab = b.dataset.tab; S.pick = { 1: 0, 5: 0, 10: 0, 25: 0 }; S.msg = null; render(); });
+  app.querySelectorAll("[data-to]").forEach(b => b.onclick = () => { S.to = Number(b.dataset.to); render(); });
+  if ($("#go")) $("#go").onclick = S.tab === "build" ? build : give;
+}
+
+async function load() {
+  try { S.d = await api("/join", { code: S.code, team: S.team, key: S.key }); }
+  catch (e) { if (!S.d) $("#app").innerHTML = `<h1>Alliance game</h1><div class="msg err">${esc(e.message)}</div>`; return; }
+  for (const k of DENOMS) S.pick[k] = Math.min(S.pick[k], S.d.units[k]);
+  render();
+}
+
+async function build() {
+  S.busy = true; render();
+  try {
+    const r = await api("/alliance/build", { code: S.code, team: S.team, key: S.key, units: S.pick });
+    S.msg = r.accepted ? { ok: true, text: `Sold! The customer bought it. Your group now has ${r.products} product${r.products > 1 ? "s" : ""}.` }
+      : { ok: false, text: `The customer rejected this product. ${r.wrong_left} more wrong tr${r.wrong_left === 1 ? "y" : "ies"} allowed.` };
+    if (r.accepted) S.pick = { 1: 0, 5: 0, 10: 0, 25: 0 };
+  } catch (e) { S.msg = { ok: false, text: e.message }; }
+  S.busy = false; await load();
+}
+
+async function give() {
+  S.busy = true; render();
+  try {
+    await api("/alliance/give", { code: S.code, team: S.team, key: S.key, to: S.to, units: S.pick });
+    S.msg = { ok: true, text: `Given to Group ${S.to}.` };
+    S.pick = { 1: 0, 5: 0, 10: 0, 25: 0 }; S.to = null;
+  } catch (e) { S.msg = { ok: false, text: e.message }; }
+  S.busy = false; await load();
+}
+
+load();
+setInterval(() => { if (!document.hidden && !S.busy) load(); }, 4000);
+</script>
+</body>
+</html>
