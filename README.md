@@ -7,7 +7,7 @@ Two in-class phone games with live results on the projector. Students scan a QR 
 | Layoff decision | "Forced Retrenchment at Atkinson", Gregory G. Dess (UT Dallas) and Stephanie Newport | Week 11, Ch15 Human Resource Management |
 | Alliance game | "The Strategic Alliance Game", Bell et al. (2017) | Week 7, Ch12 Alliances and Acquisitions |
 
-The SWOT game lives separately at https://wen-tan.com/swot-game/.
+The SWOT game lives separately at https://wen-tan.com/swot-game/. Its source files, facilitator script and phone mockups are in the `SWOT game` folder next to this one.
 
 ## Files
 
