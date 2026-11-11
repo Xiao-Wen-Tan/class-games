@@ -26,6 +26,11 @@ const ALLIANCE_DEBRIEF = [
   "Who had the most bargaining power, and why?",
 ];
 
+// The page address without "https://", for students who type it in.
+const short = path => (SITE_ROOT + path).replace(/^https?:\/\//, "");
+// Same address with a break opportunity after each slash, so it wraps at a slash, never mid-word.
+const shortWrap = path => esc(short(path)).replace(/\//g, "/<wbr>");
+
 function qr(el, text, size) {
   el.innerHTML = "";
   new QRCode(el, { text, width: size, height: size, correctLevel: QRCode.CorrectLevel.M });
@@ -60,19 +65,22 @@ function renderLayoff(app, err) {
   const crit = CRITERIA.map(([k, l]) => [l, t.criteria[k]]).sort((a, b) => b[1] - a[1]);
   const phaseLabel = { solo: "Individual round", group: "Group round", closed: "Answers closed" }[d.phase];
   app.innerHTML = `<div class="top"><h1>Who goes first? <span class="dim" style="font-size:1.2rem">Atkinson Paper layoff decision</span></h1>
-      <div class="codebox">${d.code}</div></div>
+      <div class="codebox"><div class="codelabel">Access code</div>${d.code}</div></div>
     <div class="controls noprint">
       <button class="btn ghost" data-phase="solo">Individual round</button>
       <button class="btn ghost" data-phase="group">Start group round</button>
       <button class="btn ghost" data-phase="closed">Close answers</button>
       <button class="btn ghost" id="view">Showing: ${G.view === "solo" ? "individuals" : "groups"} (switch)</button>
+      <a class="btn ghost" href="${url}" target="_blank" rel="noopener">Open the student view</a>
       <button class="btn" id="sum">${G.busy === "sum" ? "Claude is reading the reasons..." : "Summarize reasons with AI"}</button>
     </div>${err}
     <div class="grid2">
       <div>
-        <div class="card"><div class="row" style="align-items:center;gap:22px"><div class="qr" id="qr"></div>
+        <div class="card"><div class="row" style="align-items:center;gap:22px">
+          <div style="text-align:center"><div class="qr" id="qr"></div>
+            <div class="joinurl">${shortWrap("layoff/")}</div><div class="small">access code <b>${d.code}</b></div></div>
           <div><div class="kicker">${phaseLabel}</div><div class="big">${t.n}</div><div class="dim">${G.view === "solo" ? "people" : "groups"} have answered</div>
-          <p class="small dim" style="margin-top:10px">Scan, or go to<br><b>${esc(url.replace(/^https?:\/\//, ""))}</b></p></div></div></div>
+          <p class="small dim" style="margin-top:10px">No camera? Type the address under the QR code, then the access code <b>${d.code}</b>.</p></div></div></div>
         <div class="card"><h3>Laid off first (number of ${G.view === "solo" ? "people" : "groups"})</h3>${bars(first, Math.max(1, ...first.map(r => r[1])))}</div>
       </div>
       <div>
@@ -115,13 +123,20 @@ function renderAlliance(app, err) {
   const link = n => `${SITE_ROOT}alliance/?s=${d.code}&t=${n}&k=${d.teams[n].key}`;
   const totalProducts = N.reduce((s, n) => s + d.teams[n].products, 0);
   const head = `<div class="top"><h1>The Strategic Alliance Game</h1>
-    <div class="codebox" style="min-width:4.5ch;text-align:center">${d.started ? mmss(d.seconds_left) : d.minutes + ":00"}</div></div>`;
-  if (!d.started && d.phase === "play") {
-    app.innerHTML = `${head}<p>Each group scans <b>its own</b> code. Everyone in a group may scan the same code.</p>
-      <div class="controls noprint"><button class="btn" id="startclock">Start the ${d.minutes}-minute clock</button><button class="btn ghost" onclick="print()">Print the group codes</button></div>${err}
-      <div class="grid3">${N.map(n => `<div class="card teamqr"><h2 style="margin:0">Group ${n}</h2><div class="qr" id="q${n}"></div></div>`).join("")}</div>`;
+    <div class="codebox" style="min-width:4.5ch;text-align:center"><div class="codelabel">${d.started ? "Time left" : "Clock"}</div>${d.started ? mmss(d.seconds_left) : d.minutes + ":00"}</div>
+    <div class="codebox"><div class="codelabel">Access code</div>${d.code}</div></div>`;
+  if ((!d.started && d.phase === "play") || G.showCodes) {
+    app.innerHTML = `${head}<p>Each group scans <b>its own</b> code. Everyone in a group may scan the same code.
+      No camera? Go to <b>${esc(short("alliance/"))}</b> and type the access code, your group number and your group key.</p>
+      <div class="controls noprint">${d.started ? `<button class="btn" id="back">Back to the game</button>` : `<button class="btn" id="startclock">Start the ${d.minutes}-minute clock</button>`}
+        <button class="btn ghost" onclick="print()">Print the group codes</button>
+        <a class="btn ghost" href="${link(N[0])}" target="_blank" rel="noopener">Open Group 1's student view</a></div>${err}
+      <div class="grid3">${N.map(n => `<div class="card teamqr"><h2 style="margin:0">Group ${n}</h2><div class="qr" id="q${n}"></div>
+        <div class="joinurl">${shortWrap("alliance/")}</div>
+        <div class="small">access code <b>${d.code}</b> &middot; group <b>${n}</b> &middot; key <b>${d.teams[n].key}</b></div></div>`).join("")}</div>`;
     N.forEach(n => qr($("#q" + n), link(n), 170));
-    $("#startclock").onclick = () => phase("start");
+    if ($("#startclock")) $("#startclock").onclick = () => phase("start");
+    if ($("#back")) $("#back").onclick = () => { G.showCodes = false; render(); };
     return;
   }
   const prod = N.map(n => [`Group ${n}`, d.teams[n].products, `${d.teams[n].products} (${d.teams[n].points} pts)`]);
@@ -131,6 +146,7 @@ function renderAlliance(app, err) {
   app.innerHTML = `${head}
     <div class="controls noprint">
       ${reveal ? `<button class="btn ghost" data-phase="play">Back to the game</button>` : `<button class="btn ghost" data-phase="reveal">End and reveal</button>`}
+      <button class="btn ghost" id="codes">Show the group codes</button>
       <button class="btn" id="sum">${G.busy === "sum" ? "Claude is reading the trades..." : "Summarize the game with AI"}</button>
     </div>${err}
     ${reveal ? `<div class="card gold"><div class="row" style="align-items:center;gap:26px">
@@ -151,6 +167,7 @@ function renderAlliance(app, err) {
       <div class="card"><h3>Debrief</h3><ol>${ALLIANCE_DEBRIEF.map(q => `<li style="margin:6px 0">${esc(q)}</li>`).join("")}</ol></div>` : ""}
     ${d.summary ? `<div class="card gold"><div class="kicker">AI summary of the game</div><div class="summary">${esc(d.summary)}</div></div>` : ""}`;
   app.querySelectorAll("[data-phase]").forEach(b => b.onclick = () => phase(b.dataset.phase));
+  $("#codes").onclick = () => { G.showCodes = true; render(); };
   $("#sum").onclick = summarize;
 }
 

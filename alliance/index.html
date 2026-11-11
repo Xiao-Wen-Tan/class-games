@@ -99,8 +99,25 @@ async function give() {
   S.busy = false; await load();
 }
 
-load();
-setInterval(() => { if (!document.hidden && !S.busy) load(); }, 4000);
+// Students without a camera open the plain address and type the three values from the projector.
+function joinForm(msg) {
+  $("#app").innerHTML = `<div class="kicker">IMS 3310 class game</div><h1>Alliance game</h1>
+    <p>Type what the projector shows under your group's code.</p>
+    <p class="small"><b>Access code</b></p><input id="jc" type="text" maxlength="4" autocapitalize="characters" placeholder="ABCD">
+    <p class="small" style="margin-top:12px"><b>Group number</b></p><input id="jt" type="text" inputmode="numeric" maxlength="1" placeholder="1 to 6">
+    <p class="small" style="margin-top:12px"><b>Group key</b></p><input id="jk" type="text" maxlength="6" autocapitalize="none" placeholder="6 letters and numbers">
+    <div style="height:12px"></div>${msg ? `<div class="msg err">${esc(msg)}</div>` : ""}<button class="btn" id="jgo">Join my group</button>`;
+  $("#jgo").onclick = async () => {
+    S.code = $("#jc").value.trim().toUpperCase(); S.team = $("#jt").value.trim(); S.key = $("#jk").value.trim().toLowerCase();
+    try { S.d = await api("/join", { code: S.code, team: S.team, key: S.key }); }
+    catch (e) { joinForm(e.message); return; }
+    history.replaceState(null, "", `?s=${S.code}&t=${S.team}&k=${S.key}`);
+    render();
+  };
+}
+
+if (S.code && S.team && S.key) load(); else joinForm();
+setInterval(() => { if (S.d && !document.hidden && !S.busy) load(); }, 4000);
 </script>
 </body>
 </html>

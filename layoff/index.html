@@ -29,7 +29,7 @@ function render() {
   const err = S.error ? `<div class="msg err">${esc(S.error)}</div>` : "";
   if (S.screen === "join") {
     app.innerHTML = `<div class="kicker">IMS 3310 class game</div><h1>Layoff decision</h1>
-      <p>Type the 4-letter code on the screen.</p>
+      <p>Type the 4-letter access code shown on the screen.</p>
       <input id="code" type="text" maxlength="4" autocapitalize="characters" value="${esc(S.code)}" placeholder="ABCD">
       <div style="height:12px"></div>${err}<button class="btn" id="go">Join</button>`;
     $("#go").onclick = () => { S.code = $("#code").value.trim().toUpperCase(); join(); };

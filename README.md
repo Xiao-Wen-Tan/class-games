@@ -23,14 +23,14 @@ The SWOT game lives separately at https://wen-tan.com/swot-game/.
 ## Running a game in class
 
 **Layoff game (about 25 minutes, or 5 minutes in short form)**
-1. Open `wen-tan.com/class-games/screen/?game=layoff`, type the instructor password and press **Start a new game**. A 4-letter code and a QR code appear.
+1. Open `wen-tan.com/class-games/screen/?game=layoff`, type the instructor password and press **Start a new game**. A 4-letter access code and a QR code appear. Students without a camera type the address shown under the QR code, then the access code. "Open the student view" shows what students see.
 2. Students scan, read the scenario, tap the eight managers in layoff order, pick what mattered most and type one reason. The charts update every few seconds.
 3. For the group round, press **Start group round**. One student per group enters the group's ranking and group number. Press **Showing: individuals (switch)** to compare.
 4. Press **Close answers**, then **Summarize reasons with AI** for the debrief themes. The debrief questions are at the bottom of the page.
 5. To reopen the same game later, use `screen/?code=ABCD`.
 
 **Alliance game (about 35 minutes)**
-1. Open `screen/?game=alliance` and start a new game. Six QR codes appear, one per group. Use **Print the group codes** to hand them out on paper.
+1. Open `screen/?game=alliance` and start a new game. Six QR codes appear, one per group. Under each one are the address, the access code, the group number and a group key, for students who type them in instead. "Show the group codes" brings them back after the clock starts. Use **Print the group codes** to hand them out on paper.
 2. Each group scans its own code. Group 1 sees the secret specification (37 units); the others see their production units. Give 10 minutes to plan.
 3. Press **Start the 20-minute clock**. Groups can now give units to other groups and build products on their phones. The server checks that each product totals exactly 37 and that the group holds the units. A group may submit 3 wrong products; after that the customer stops looking (this limit is new in the phone version, so guessing cannot replace the specification).
 4. Press **End and reveal**, then **Summarize the game with AI** for the debrief.
