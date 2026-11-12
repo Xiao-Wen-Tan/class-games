@@ -18,5 +18,6 @@ CREATE TABLE IF NOT EXISTS layoff_answers (
   ranking TEXT NOT NULL,          -- JSON list of 8 manager ids, first to be laid off first
   criterion TEXT NOT NULL,
   reason TEXT NOT NULL,
+  other_text TEXT NOT NULL DEFAULT '', -- typed answer when the criterion is "other" (Something else)
   PRIMARY KEY (code, player, kind)
 );

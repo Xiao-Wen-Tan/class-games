@@ -16,6 +16,9 @@ const DENOMS = ["1", "5", "10", "25"];
 const S = { code: params.get("s"), team: params.get("t"), key: params.get("k"), d: null, tab: "build",
   pick: { 1: 0, 5: 0, 10: 0, 25: 0 }, to: null, msg: null, busy: false };
 const value = u => DENOMS.reduce((s, d) => s + Number(d) * (u[d] || 0), 0);
+// Each phone shows the rules first, once per group link, and again from the Rules button.
+const rulesKey = () => `alliance.rules.${S.code}.${S.team}`;
+const rulesSeen = () => { try { return localStorage.getItem(rulesKey()) === "1"; } catch { return false; } };
 const fmtUnits = u => DENOMS.filter(d => u[d]).map(d => `${u[d]}&times;${d}`).join(" + ") || "none";
 
 function slips(u, editable) {
@@ -24,9 +27,19 @@ function slips(u, editable) {
     ${editable ? `<div class="held">of ${u[d]} held</div><div class="stepper"><button data-d="${d}" data-s="-1">&minus;</button><button data-d="${d}" data-s="1">+</button></div>` : ""}</div>`).join("")}</div>`;
 }
 
+function renderRules() {
+  const d = S.d, app = $("#app");
+  app.innerHTML = `<div class="kicker">Alliance game &middot; Group ${d.team}</div>
+    <h1>How the game works</h1>
+    <div class="card"><ol class="rules">${allianceRules(d).map(r => `<li>${r}</li>`).join("")}</ol></div>
+    <button class="btn" id="cont">Continue to Group ${d.team}</button>`;
+  $("#cont").onclick = () => { try { localStorage.setItem(rulesKey(), "1"); } catch {} S.rules = false; render(); window.scrollTo(0, 0); };
+}
+
 function render() {
   const d = S.d, app = $("#app");
   if (!d) return;
+  if (S.rules || !rulesSeen() && S.rules !== false) return renderRules();
   const msg = S.msg ? `<div class="msg ${S.msg.ok ? "ok" : "err"}">${esc(S.msg.text)}</div>` : "";
   const over = d.phase !== "play" || (d.started && d.seconds_left === 0);
   const clock = !d.started ? "Planning time" : over ? "Time is up" : `${mmss(d.seconds_left)} left`;
@@ -60,7 +73,8 @@ function render() {
     ${knowledge}
     ${(S.tab && d.started && !over) ? "" : `<h3>Your production units</h3>${slips(d.units, false)}`}
     ${msg}${action}
-    ${recent.length ? `<h3 style="margin-top:18px">Your recent moves</h3><ul class="log">${recent.map(r => `<li>${r}</li>`).join("")}</ul>` : ""}`;
+    ${recent.length ? `<h3 style="margin-top:18px">Your recent moves</h3><ul class="log">${recent.map(r => `<li>${r}</li>`).join("")}</ul>` : ""}
+    <button class="btn ghost" id="rules" style="margin-top:18px">Read the rules again</button>`;
 
   app.querySelectorAll(".stepper button").forEach(b => b.onclick = () => {
     const k = b.dataset.d, n = S.pick[k] + Number(b.dataset.s);
@@ -69,6 +83,7 @@ function render() {
   app.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { S.tab = b.dataset.tab; S.pick = { 1: 0, 5: 0, 10: 0, 25: 0 }; S.msg = null; render(); });
   app.querySelectorAll("[data-to]").forEach(b => b.onclick = () => { S.to = Number(b.dataset.to); render(); });
   if ($("#go")) $("#go").onclick = S.tab === "build" ? build : give;
+  $("#rules").onclick = () => { S.rules = true; render(); window.scrollTo(0, 0); };
 }
 
 async function load() {

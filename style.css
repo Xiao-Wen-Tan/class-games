@@ -106,6 +106,12 @@ textarea { min-height: 90px; resize: vertical; }
 .total { font-size: 1.15rem; font-weight: 700; margin: 8px 0 12px; }
 .tabs { display: flex; gap: 8px; margin: 14px 0 10px; }
 .tabs .chip { flex: 1; text-align: center; }
+ol.rules { margin: 0; padding-left: 1.3rem; }
+ol.rules li { margin: 0 0 .7rem; line-height: 1.45; }
+ol.rules li:last-child { margin-bottom: 0; }
+body.screen ol.rules { font-size: 1.3rem; columns: 2; column-gap: 44px; }
+body.screen ol.rules li { break-inside: avoid; }
+@media (max-width: 900px) { body.screen ol.rules { columns: 1; } }
 .log { list-style: none; padding: 0; margin: 0; font-size: .92rem; }
 .log li { padding: 6px 0; border-bottom: 1px solid var(--line); }
 
@@ -142,3 +148,27 @@ table.alloc th:first-child, table.alloc td:first-child { text-align: left; }
   .controls, .noprint { display: none !important; }
   body { background: #fff; }
 }
+
+/* ---- layoff: case pages, notes, org chart ------------------------------ */
+
+.pagetabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; }
+.pagetabs .chip { padding: 6px 10px; font-size: .85rem; }
+.casetext p { font-size: 1.05rem; line-height: 1.6; }
+.factstrip { font-size: .92rem; color: var(--dim); background: var(--surface); border: 2px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 0 0 14px; }
+.notebox { display: block; font-weight: 700; font-size: .95rem; margin: 18px 0 6px; }
+#note { min-height: 140px; }
+.navrow { margin-top: 16px; }
+.navrow .btn + .btn { margin-top: 0; }
+.pagecount { text-align: center; margin-top: 8px; }
+.mgrnote { font-size: .88rem; font-style: italic; color: var(--dim); margin-top: 6px; white-space: pre-wrap; }
+.linkbtn { background: none; border: 0; padding: 6px 0 0; font: inherit; font-size: .9rem; font-weight: 700; color: var(--blue); text-decoration: underline; cursor: pointer; }
+.org { margin: 4px 0 8px; }
+.orggrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+.orgbox { background: var(--surface); border: 2px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: .88rem; line-height: 1.3; text-align: center; color: var(--ink); font-family: inherit; }
+.orgbox.top { max-width: 200px; margin: 0 auto 8px; }
+.orgbox.here { border-color: var(--blue); background: var(--blue-sf); }
+.orgbox.you { border-color: var(--gold); background: var(--gold-sf); }
+.orgbox.region { cursor: pointer; }
+.orglabel { font-size: .82rem; color: var(--dim); font-weight: 700; margin: 12px 0 6px; }
+ul.others { margin: 0; padding-left: 1.2rem; }
+ul.others li { margin: 4px 0; }

@@ -11,10 +11,12 @@
 <script src="../common.js"></script>
 <script src="data.js"></script>
 <script>
-// Phone page for the layoff game. Screens: join, intro, rank, why, done.
+// Phone page for the layoff game. Screens: join, case (page 0 = the handout overview and org chart,
+// pages 1-8 = one manager each), rank (page 9), why, done. Each case page has a notes box; notes stay
+// in this phone's browser and are never sent to the server.
 const S = {
   code: (params.get("s") || "").toUpperCase(), phase: "solo", groupRound: true,
-  order: [], criterion: null, reason: "", group: "", screen: "join", error: "", busy: false,
+  order: [], criterion: null, reason: "", other: "", group: "", screen: "join", page: 0, notes: {}, error: "", busy: false,
 };
 let player;
 try { player = localStorage.getItem("layoff.player"); if (!player) { player = crypto.randomUUID(); localStorage.setItem("layoff.player", player); } }
@@ -23,6 +25,55 @@ catch { player = crypto.randomUUID(); }
 const byId = Object.fromEntries(MANAGERS.map(m => [m.id, m]));
 const pct = n => `<span class="growth ${n > 0 ? "up" : n < 0 ? "down" : ""}">${n > 0 ? "+" : ""}${n}%</span>`;
 const isGroup = () => S.phase === "group";
+
+// Page keys: "case" for the overview, then the eight manager ids, then "rank".
+const PAGES = ["case", ...MANAGERS.map(m => m.id), "rank"];
+const RANK_PAGE = PAGES.length - 1;
+const MIN_OTHER = 3;
+
+const notesKey = () => "layoff.notes." + S.code;
+function loadNotes() { try { S.notes = JSON.parse(localStorage.getItem(notesKey()) || "{}") || {}; } catch { S.notes = {}; } }
+function saveNotes() { try { localStorage.setItem(notesKey(), JSON.stringify(S.notes)); } catch {} }
+function keepNote() { const t = $("#note"); if (t) { S.notes[PAGES[S.page]] = t.value; saveNotes(); } }
+
+function go(page) {
+  keepNote();
+  S.page = page; S.screen = page === RANK_PAGE ? "rank" : "case"; S.error = "";
+  render(); scrollTo(0, 0);
+}
+
+function pageTabs() {
+  const label = k => k === "case" ? "Case" : k === "rank" ? "Rank" : byId[k].name.split(" ").pop();
+  return `<div class="pagetabs">${PAGES.map((k, i) =>
+    `<button class="chip ${i === S.page ? "on" : ""}" data-page="${i}">${label(k)}</button>`).join("")}</div>`;
+}
+
+function noteBox(label) {
+  return `<label class="notebox" for="note">${label}</label>
+    <textarea id="note" maxlength="4000" placeholder="Type or paste anything you want to remember">${esc(S.notes[PAGES[S.page]] || "")}</textarea>`;
+}
+
+function navRow() {
+  const next = S.page + 1 === RANK_PAGE ? "Go to the ranking" : "Next";
+  return `<div class="row navrow">${S.page > 0 ? `<button class="btn ghost" id="prev">Back</button>` : ""}
+    <button class="btn" id="next">${next}</button></div>
+    <p class="small dim pagecount">Page ${S.page + 1} of ${PAGES.length}</p>`;
+}
+
+const groupBanner = () => isGroup() ? `<div class="card blue"><b>Group round.</b> Agree as a group. One person submits for the whole group.</div>` : "";
+
+function orgChart() {
+  const box = (lines, cls = "") => `<div class="orgbox ${cls}">${lines.map((l, i) => i ? `<div>${esc(l)}</div>` : `<b>${esc(l)}</b>`).join("")}</div>`;
+  return `<div class="org">
+    ${box([ORG.top], "top")}
+    <div class="orggrid">${ORG.units.map(u => box(u, u[1] === "Sales & Marketing" ? "here" : "")).join("")}</div>
+    <div class="orglabel">Reporting to Pat Ingram, VP Sales &amp; Marketing</div>
+    <div class="orggrid">${ORG.underSales.map((u, i) => box(u, i ? "you" : "")).join("")}</div>
+    <div class="orglabel">Reporting to you, Lynn Jackson: the eight regional sales managers (tap one to read the profile)</div>
+    <div class="orggrid">${ORG.regions.map(id => { const m = byId[id];
+      return `<button class="orgbox region" data-page="${PAGES.indexOf(id)}"><b>${esc(m.region)}</b><div>${esc(m.name)}</div></button>`; }).join("")}</div>
+  </div>`;
+}
 
 function render() {
   const app = $("#app");
@@ -35,31 +86,49 @@ function render() {
     $("#go").onclick = () => { S.code = $("#code").value.trim().toUpperCase(); join(); };
     return;
   }
-  if (S.screen === "intro") {
-    app.innerHTML = `<div class="kicker">Atkinson Paper Company${isGroup() ? " &middot; group round" : ""}</div>
-      <h1>You are Lynn Jackson, National Sales Manager.</h1>
-      <p>Atkinson makes office paper. Its parent company, Continental, now treats it as a <b>cash cow</b>, with goals of profit of <b>10% of sales</b> and sales growth of <b>3% a year</b>.</p>
-      <p>Your boss, Pat Ingram, says you must cut costs by moving to fewer regional offices. As a first step, rank all <b>eight regional sales managers</b> in layoff order.</p>
-      <div class="card gold"><b>1 = laid off first.</b> 8 = laid off last.</div>
-      ${isGroup() ? `<div class="card blue"><b>Group round.</b> Agree as a group. One person submits for the whole group.</div>` : ""}
-      <button class="btn" id="go">See the eight managers</button>`;
-    $("#go").onclick = () => { S.screen = "rank"; render(); scrollTo(0, 0); };
+  if (S.screen === "case" && S.page === 0) {
+    app.innerHTML = `${pageTabs()}<div class="kicker">Atkinson Paper Company${isGroup() ? " &middot; group round" : ""}</div>
+      <h1>Forced Retrenchment at Atkinson: Overview</h1>${groupBanner()}
+      <div class="casetext">${OVERVIEW.map(p => `<p>${esc(p)}</p>`).join("")}</div>
+      <div class="card gold">You are <b>Lynn Jackson</b>. Rank all eight managers: <b>1 = laid off first</b>, 8 = laid off last.
+        Read each manager's page first; the ranking is the last page.</div>
+      <h2>Organization structure</h2>${orgChart()}
+      ${noteBox("Your notes on the case (only saved on this phone)")}${navRow()}`;
+  } else if (S.screen === "case") {
+    const m = byId[PAGES[S.page]];
+    app.innerHTML = `${pageTabs()}<div class="kicker">Manager ${S.page} of ${MANAGERS.length} &middot; ${esc(m.region)} region${isGroup() ? " &middot; group round" : ""}</div>
+      <h1>${esc(m.name)}</h1>${groupBanner()}
+      <div class="factstrip">${m.age ? m.age + " years old" : "Age not given"} &middot; ${m.tenure} ${m.tenure === 1 ? "year" : "years"} at APC
+        &middot; Sales growth ${pct(m.earlier)} (${m.earlierYears || "2016-18"}) &rarr; ${pct(m.recent)} (2019-21)</div>
+      <div class="casetext"><p>${esc(m.profile)}</p></div>
+      ${noteBox(`Your notes on ${esc(m.name.split(" ")[0])} (only saved on this phone)`)}${navRow()}`;
+  }
+  if (S.screen === "case") {
+    app.querySelectorAll("[data-page]").forEach(el => el.onclick = () => go(+el.dataset.page));
+    $("#note").oninput = e => { S.notes[PAGES[S.page]] = e.target.value; saveNotes(); };
+    if ($("#prev")) $("#prev").onclick = () => go(S.page - 1);
+    $("#next").onclick = () => go(S.page + 1);
     return;
   }
   if (S.screen === "rank") {
     const cards = MANAGERS.map(m => {
-      const k = S.order.indexOf(m.id);
+      const k = S.order.indexOf(m.id), note = (S.notes[m.id] || "").trim();
       return `<div class="card mgr ${k >= 0 ? "picked" : ""}" data-id="${m.id}">
         <div class="badge">${k >= 0 ? k + 1 : ""}</div>
         <div><div class="who">${esc(m.name)}</div>
         <div class="meta">${esc(m.region)} &middot; ${m.age ? m.age + " yrs old" : "age not given"} &middot; ${m.tenure} yrs at APC</div>
         <div class="facts">Sales growth ${pct(m.earlier)} (${m.earlierYears || "2016-18"}) &rarr; ${pct(m.recent)} (2019-21)<br>
-        ${esc(m.who)}. ${esc(m.edu)}.${m.note ? "<br>" + esc(m.note) : ""}</div></div></div>`;
+        ${esc(m.who)}. ${esc(m.edu)}.${m.note ? "<br>" + esc(m.note) : ""}</div>
+        ${note ? `<div class="mgrnote"><b>Your note:</b> ${esc(note)}</div>` : ""}
+        <button class="linkbtn" data-page="${PAGES.indexOf(m.id)}">Read full profile</button></div></div>`;
     }).join("");
+    const caseNote = (S.notes.case || "").trim();
     const left = MANAGERS.length - S.order.length;
-    app.innerHTML = `<div class="kicker">Tap in layoff order${isGroup() ? " &middot; group round" : ""}</div>
+    app.innerHTML = `${pageTabs()}<div class="kicker">Tap in layoff order${isGroup() ? " &middot; group round" : ""}</div>
       <h2>${left ? `Tap who goes ${S.order.length ? "next" : "first"}.` : "All eight ranked."}</h2>
-      <p class="small dim">Tap a numbered card again to take it back.</p>${cards}${err}
+      <p class="small dim">1 = laid off first. Tap a numbered card again to take it back.</p>
+      ${caseNote ? `<div class="card"><div class="mgrnote" style="margin:0"><b>Your notes on the case:</b> ${esc(caseNote)}</div></div>` : ""}
+      ${cards}${err}
       <button class="btn" id="go" ${left ? "disabled" : ""}>${left ? `${left} still to rank` : "Next"}</button>
       <button class="btn ghost" id="clear">Start over</button>`;
     app.querySelectorAll(".mgr").forEach(el => el.onclick = () => {
@@ -67,22 +136,31 @@ function render() {
       if (k >= 0) S.order.splice(k, 1); else S.order.push(id);
       S.error = ""; render();
     });
+    app.querySelectorAll("[data-page]").forEach(el => el.onclick = e => { e.stopPropagation(); go(+el.dataset.page); });
     $("#go").onclick = () => { S.screen = "why"; render(); scrollTo(0, 0); };
     $("#clear").onclick = () => { S.order = []; render(); };
     return;
   }
   if (S.screen === "why") {
+    const isOther = S.criterion === "other";
     app.innerHTML = `<div class="kicker">One last step</div>
       <h2>What mattered most in your ranking?</h2>
       <div class="chips">${CRITERIA.map(([k, l]) => `<button class="chip ${S.criterion === k ? "on" : ""}" data-k="${k}">${l}</button>`).join("")}</div>
+      ${isOther ? `<p class="small"><b>What else mattered most?</b></p>
+        <input id="other" type="text" maxlength="100" value="${esc(S.other)}" placeholder="Type it in a few words">
+        <div style="height:14px"></div>` : ""}
       <p class="small"><b>In one sentence, why is ${esc(byId[S.order[0]].name)} first to go?</b></p>
       <textarea id="reason" maxlength="280" placeholder="Optional, shown anonymously">${esc(S.reason)}</textarea>
       ${isGroup() ? `<p class="small" style="margin-top:12px"><b>Your group number</b></p><input id="group" type="text" inputmode="numeric" maxlength="2" value="${esc(S.group)}" placeholder="for example 3">` : ""}
       <div style="height:12px"></div>${err}
-      <button class="btn green" id="go" ${S.criterion && !S.busy ? "" : "disabled"}>${S.busy ? "Sending..." : isGroup() ? "Submit for my group" : "Submit"}</button>
+      <button class="btn green" id="go" ${canSubmit() ? "" : "disabled"}>${S.busy ? "Sending..." : isGroup() ? "Submit for my group" : "Submit"}</button>
       <button class="btn ghost" id="back">Back to the ranking</button>`;
-    app.querySelectorAll(".chip").forEach(el => el.onclick = () => { S.reason = $("#reason").value; S.criterion = el.dataset.k; if ($("#group")) S.group = $("#group").value; render(); });
-    $("#back").onclick = () => { S.reason = $("#reason").value; S.screen = "rank"; render(); };
+    app.querySelectorAll(".chip").forEach(el => el.onclick = () => {
+      keepWhy(); S.criterion = el.dataset.k; render();
+      if (S.criterion === "other" && !S.other.trim()) $("#other").focus();
+    });
+    if ($("#other")) $("#other").oninput = e => { S.other = e.target.value; $("#go").disabled = !canSubmit(); };
+    $("#back").onclick = () => { keepWhy(); go(RANK_PAGE); };
     $("#go").onclick = submit;
     return;
   }
@@ -91,10 +169,21 @@ function render() {
     <h1>Look at the screen.</h1>
     <p>Your layoff order:</p>
     <div class="card">${S.order.map((id, i) => `<div style="padding:4px 0"><b>${i + 1}.</b> ${esc(byId[id].name)} <span class="dim small">(${esc(byId[id].region)})</span></div>`).join("")}</div>
-    ${S.phase === "group" && !S.sentGroup ? `<div class="card blue"><b>Group round has started.</b> Agree on one order as a group; one person submits it.</div><button class="btn" id="grp">Enter my group's ranking</button>` : ""}
+    ${S.phase === "group" && !S.sentGroup ? `<div class="card blue"><b>Group round has started.</b> Agree on one order as a group; one person submits it. Your notes are still on every page.</div><button class="btn" id="grp">Enter my group's ranking</button>` : ""}
     <button class="btn ghost" id="edit">Change my answer</button>`;
-  $("#edit").onclick = () => { S.screen = "rank"; render(); scrollTo(0, 0); };
-  if ($("#grp")) $("#grp").onclick = () => { S.order = []; S.criterion = null; S.reason = ""; S.screen = "intro"; render(); };
+  $("#edit").onclick = () => go(RANK_PAGE);
+  if ($("#grp")) $("#grp").onclick = () => { S.order = []; S.criterion = null; S.reason = ""; S.other = ""; go(0); };
+}
+
+function canSubmit() {
+  return !!S.criterion && !S.busy && (S.criterion !== "other" || S.other.trim().length >= MIN_OTHER);
+}
+
+// Keep what is typed on the why screen before it re-renders.
+function keepWhy() {
+  if ($("#reason")) S.reason = $("#reason").value;
+  if ($("#other")) S.other = $("#other").value;
+  if ($("#group")) S.group = $("#group").value;
 }
 
 async function join() {
@@ -102,19 +191,22 @@ async function join() {
   try {
     const r = await api("/join", { code: S.code });
     if (r.game !== "layoff") throw new Error("This code is for a different game.");
-    S.phase = r.phase; S.groupRound = r.group_round; S.screen = "intro";
+    S.phase = r.phase; S.groupRound = r.group_round; S.screen = "case"; S.page = 0;
+    loadNotes();
     history.replaceState(null, "", "?s=" + S.code);
   } catch (e) { S.error = e.message; }
   render();
 }
 
 async function submit() {
-  S.reason = $("#reason").value.trim();
-  if ($("#group")) S.group = $("#group").value.trim();
+  keepWhy();
+  S.reason = S.reason.trim(); S.group = S.group.trim();
   if (isGroup() && !/^\d{1,2}$/.test(S.group)) { S.error = "Type your group number."; render(); return; }
+  if (S.criterion === "other" && S.other.trim().length < MIN_OTHER) { S.error = "Type what else mattered most."; render(); return; }
   S.busy = true; S.error = ""; render();
   try {
-    const r = await api("/layoff/submit", { code: S.code, player, ranking: S.order, criterion: S.criterion, reason: S.reason, group: isGroup() ? S.group : undefined });
+    const r = await api("/layoff/submit", { code: S.code, player, ranking: S.order, criterion: S.criterion, reason: S.reason,
+      other: S.criterion === "other" ? S.other.trim() : "", group: isGroup() ? S.group : undefined });
     if (r.kind === "group") S.sentGroup = true;
     S.screen = "done";
   } catch (e) { S.error = e.message; }

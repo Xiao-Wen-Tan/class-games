@@ -24,16 +24,17 @@ The SWOT game lives separately at https://wen-tan.com/swot-game/. Its source fil
 
 **Layoff game (about 25 minutes, or 5 minutes in short form)**
 1. Open `wen-tan.com/class-games/screen/?game=layoff`, type the instructor password and press **Start a new game**. A 4-letter access code and a QR code appear. Students without a camera type the address shown under the QR code, then the access code. "Open the student view" shows what students see.
-2. Students scan, read the scenario, tap the eight managers in layoff order, pick what mattered most and type one reason. The charts update every few seconds.
+2. Students scan and page through the handout text: the overview with the organization chart, then one page per manager with the full profile. The buttons at the top jump to any page, and Back and Next move one page. Every page has a notes box; notes are saved only in the student's phone browser and never sent to the server. The last page is the ranking, with short manager cards, each student's own notes and a "Read full profile" link. Students tap the eight managers in layoff order, pick what mattered most (picking "Something else" asks them to type what it was) and type one reason. The charts update every few seconds, and the typed "Something else" answers are listed under "What mattered most".
 3. For the group round, press **Start group round**. One student per group enters the group's ranking and group number. Press **Showing: individuals (switch)** to compare.
 4. Press **Close answers**, then **Summarize reasons with AI** for the debrief themes. The debrief questions are at the bottom of the page.
 5. To reopen the same game later, use `screen/?code=ABCD`.
 
-**Alliance game (about 35 minutes)**
-1. Open `screen/?game=alliance` and start a new game. Six QR codes appear, one per group. Under each one are the address, the access code, the group number and a group key, for students who type them in instead. "Show the group codes" brings them back after the clock starts. Use **Print the group codes** to hand them out on paper.
-2. Each group scans its own code. Group 1 sees the secret specification (37 units); the others see their production units. Give 10 minutes to plan.
-3. Press **Start the 20-minute clock**. Groups can now give units to other groups and build products on their phones. The server checks that each product totals exactly 37 and that the group holds the units. A group may submit 3 wrong products; after that the customer stops looking (this limit is new in the phone version, so guessing cannot replace the specification).
-4. Press **End and reveal**, then **Summarize the game with AI** for the debrief.
+**Alliance game (10 minutes of planning, then a 40-minute clock)**
+1. Open `screen/?game=alliance` and start a new game. The projector first shows the rules, taken from the Week 7 slides. Press **Show the group codes** when the class is ready. **Show the rules** brings the rules back at any time.
+2. Six QR codes appear, one per group. Under each one are the address, the access code, the group number and a group key, for students who type them in instead. "Show the group codes" brings them back after the clock starts. Use **Print the group codes** to hand them out on paper. **Open Group 1's student view** and **Open Group 2's student view** show what a group with the specification and a group with production units see.
+3. Each group scans its own code. Each phone opens on the same rules, then the group's page (the rules come back from **Read the rules again**). Group 1 sees the secret specification (37 units); the others see their production units. Give 10 minutes to plan.
+4. Press **Start the 40-minute clock**. Groups can now give units to other groups and build products on their phones. The server checks that each product totals exactly 37 and that the group holds the units. A group may submit 3 wrong products; after that the customer stops looking (this limit is new in the phone version, so guessing cannot replace the specification).
+5. Press **End and reveal**, then **Summarize the game with AI** for the debrief.
 
 Each product earns 5 bonus points, as in the Week 7 slides. Groups that combine resources agree on the split themselves.
 
